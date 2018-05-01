@@ -4,8 +4,8 @@ mer_type = { 1:'MONOMERIC', 2:'DIMERIC', 3:'TRIMERIC', 4:'TETRAMERIC', 5:'PENTAM
              6:'HEXAMERIC', 7:'HEPTAMERIC', 8:'OCTAMERIC', 9:'NONAMERIC', 10:'DECAMERIC' }
 
 def parse_pdb_for_biomt(pdb_lines, symmetry_num):
-    '''Locates the biomt lines in the REMARK 350 section and output a dictionary
-    of the chains and transformations needed to be made to make a biological unit'''
+    '''Locates the biomt lines in the REMARK 350 section and outputs a dictionary
+    of the chains and transformations needed to be made to make the biological unit'''
     #Each index contains a dictionary of symmetry to apply to a given chain
     biological_units = [] 
     for l_index, line in enumerate(pdb_lines):
@@ -75,7 +75,21 @@ def apply_biomts(pdb_lines, relevant_biomols):
         all_symm_pdbs.append(final_pdb)
     return all_symm_pdbs
 
-
+def sequence_alignment(seq1, seq2, match=5, missmatch=-2, gap=-6):
+    '''Local alignment algorithm will match two symmetric chains well despite
+    missing residues (electron density) at the termini'''
+    #Create starting matrix where columns are seq1 and rows are seq2
+    dynmic_matrix = [[0]*len(seq1)+1] + [[0]]*len(seq2)+1]
+    for row_i in xrange(1, len(seq2)):
+        for column_j in xrange(1, len(seq1)):
+            if seq2[row_i-1] == seq1[column_j-1]:
+                mod = match
+            else:
+                mod = missmatch
+            diagonal = dynamic_matrix[row_i-1][column_j-1] + mod
+            up = dynamic_matrix[row_i-1][column_j] + gap
+            left = dynamic_matrix[row_i][column_j-1] + gap
+            dynamic_matrix[row_i][column_j] = max(0, diagonal, up, left)
 #Using these lines for testing purposes but will be turned into main at some point
 with open('4HWG.pdb', 'r') as myFH:
     mylines = myFH.readlines()
