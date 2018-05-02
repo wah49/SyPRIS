@@ -1415,10 +1415,13 @@ class Transform(object):
                     #keep going until we find the desired symm_type
                     continue
 
-    
-    def calculate_symmetric_transform(self):
+    #You can change the transform object such that it only contains backbone atoms
+    #Also, if a small region is symmetric, update the transform object to only contain
+    #the atoms that are symmetric prior to calculating the matrix. You can then extract
+    #the matrix from self.matrix_transform from the small component to a larger component
+    def calculate_symmetric_transform(self, main_chain_id=self.chain_names[0]):
         xyz_total_by_chain = {}
-        for index, name in enumerate(self.xyz_names):
+        for index, name in enumerate(xyz_names_involved):
             chain = name.split('_')[1]
             if chain not in self.chain_names:
                 self.chain_names.append(chain)
@@ -1428,12 +1431,13 @@ class Transform(object):
             except KeyError:
                 xyz_total_by_chain[chain] = [self.xyz_total[index][:]]
         
+        
         xyz_by_chain = {}
         for chain, xyz_total in xyz_total_by_chain.iteritems():
             first_33 = get_geo_center(xyz_total[:len(xyz_total)/3])
             geo_cent = get_geo_center(xyz_total[:])
             final_33 = get_geo_center(xyz_total[len(xyz_total)*2/3:])
-            if chain != self.chain_names[0]:
+            if chain != main_chain_id: #Can be changed depending on apply target
                 xyz_by_chain[chain] = [first_33[:], geo_cent[:], final_33[:]]
             else:
                 main_chain = [first_33[:], geo_cent[:], final_33[:]]
