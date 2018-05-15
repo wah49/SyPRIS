@@ -75,18 +75,15 @@ def apply_biomts(pdb_lines, relevant_biomols):
         for chains, biomt_blocks in biomol.iteritems():
             chain_count = 0
             for block_number, biomt in biomt_blocks.iteritems():
-                print 'block_number', block_number
-### YOU ARE HERE ###
-                for line in mylines:
-                    if line[0:6] in ["ATOM  ", "HETATM"] and line[21] in chains and str(line[17:20]) != 'HOH':
-                        #new_pdb.append(apply_biomt_transform(line, biomt))
-                        try:
-                            new_pdb[chain_count].append(apply_biomt_transform(line, biomt))
-                        except KeyError:
-                            new_pdb[chain_count] = [apply_biomt_transform(line, biomt)]
-                chain_count +=1
+                for chain in chains:
+                    for line in pdb_lines:
+                        if line[0:6] in ["ATOM  ", "HETATM"] and line[21] == chain and str(line[17:20]) != 'HOH':
+                            try:
+                                new_pdb[chain_count].append(apply_biomt_transform(line, biomt))
+                            except KeyError:
+                                new_pdb[chain_count] = [apply_biomt_transform(line, biomt)]
+                    chain_count +=1
         final_pdb = []
-        print len(new_pdb)
         for num in xrange(len(new_pdb)):
             final_pdb += [x[:21] + string.ascii_uppercase[num] + x[22:] for x in new_pdb[num]]
         all_symm_pdbs.append(final_pdb)
@@ -130,8 +127,6 @@ def sequence_alignment(seq1, seq2, match=-1, missmatch=20, gap=1):
                 next_pos = (current_pos[0]-1,0)
             else:
                 raise KeyError, "current_pos is not a key in direction_map and is not an epsilon"
-        #print 'current_pos', current_pos
-        #print 'next_pos', next_pos
         if next_pos[0] < current_pos[0] and next_pos[1] < current_pos[1]:
             aligned_seq1 += seq1[current_pos[1]-1]
             aligned_seq2 += seq2[current_pos[0]-1]
@@ -146,36 +141,36 @@ def sequence_alignment(seq1, seq2, match=-1, missmatch=20, gap=1):
     print aligned_seq1[::-1]
     print aligned_seq2[::-1]
     #start with max location and work back with dictionary
+    return aligned_seq1[::-1], aligned_seq2[::-1]
 
 def compartmentalize_pdb(pdb_lines):
-    #chain_key: {resi: list_of_atom_lines}
-    atoms_blocked_by_chain = {}
+    #{chain_key: {resi: list_of_atom_lines}}
+    atomlines_blocked_by_chain = {}
+    sequence_by_chain = {}
+    xyz_by_chain = {}
     for line in pdb_lines:
         if line[0:6] == "ATOM  ":
             try:
-                atoms_blocked_by_chain[line[21]][int(line[22:26])].append(line)
+                atomlines_blocked_by_chain[line[21]][int(line[22:26])].append(line)
+                xyz_by_chain[line[21]][int(line[22:26])].append([float(line[30:38]),float(line[38:46]),float(line[46:54])])
             except KeyError:
                 try:
-                    atoms_blocked_by_chain[line[21]][int(line[22:26])] = [line]
+                    atomlines_blocked_by_chain[line[21]][int(line[22:26])] = [line]
+                    sequence_by_chain[line[21]] += convert_res_type(line[17:20])
+                    xyz_by_chain[line[21]][int(line[22:26])] = [[float(line[30:38]),float(line[38:46]),float(line[46:54])]]
                 except KeyError:
-                    atoms_blocked_by_chain[line[21]] = {int(line[22:26]): [line]}
-    
-    print 'length of chains', len(atoms_blocked_by_chain)
-    sequence_by_chain = {}
-    for chain, res_blocks in atoms_blocked_by_chain.iteritems():
-        print 'length of res_blocks', chain, len(res_blocks)
-        res_keys = res_blocks.keys()
-        res_keys.sort()
-        for res in res_keys:
-            try:
-                sequence_by_chain[chain] += convert_res_type(res_blocks[res][0][17:20])
-            except KeyError:
-                sequence_by_chain[chain] = convert_res_type(res_blocks[res][0][17:20])
-            
+                    atomlines_blocked_by_chain[line[21]] = {int(line[22:26]): [line]}
+                    sequence_by_chain[line[21]] = convert_res_type(line[17:20])
+                    xyz_by_chain[line[21]] = {int(line[22:26]): [float(line[30:38]),float(line[38:46]),float(line[46:54])]}
+
+    print 'length of chains', len(atomlines_blocked_by_chain)
     for chain, seq in sequence_by_chain.iteritems():
         print 'sequence:', chain, '\n', seq
 
-    return atoms_blocked_by_chain, sequence_by_chain
+    print atomlines_blocked_by_chain['A'][6]
+    print xyz_by_chain['A'][6]
+
+    return atomlines_blocked_by_chain, sequence_by_chain, xyz_by_chain
 
 sequence_alignment('ABCDEFGHHIJKLM','BCDHIJL')
 sequence_alignment('BCDHIJL','ABCDEFGHHIJKLM')
@@ -193,6 +188,9 @@ mylines = [x+'\n' for x in myfile.split('\n')]
 
 relevant_biomols = parse_pdb_for_biomt(mylines, 4)
 print len(relevant_biomols)
+for v in relevant_biomols:
+    #print 'k:\n', k, '\nv:\n', v
+    print 'v:\n', v
 pdb_by_model = split_by_model(mylines)
 print len(pdb_by_model)
 count = 0
@@ -201,7 +199,7 @@ for model in pdb_by_model:
     for symm_pdb in all_symm_pdbs:
         #I want to maximize the occupancy of the residues in this step
         compartmentalize_pdb(symm_pdb)
-        exit(0)
+        #exit(0)
         with open('../blah_%i.pdb' % count, 'w') as myNewFH:
             myNewFH.writelines(symm_pdb)
         count += 1
