@@ -140,7 +140,6 @@ def sequence_alignment(seq1, seq2, match=-1, missmatch=20, gap=1):
         current_pos = next_pos
     print aligned_seq1[::-1]
     print aligned_seq2[::-1]
-    #start with max location and work back with dictionary
     return aligned_seq1[::-1], aligned_seq2[::-1]
 
 def compartmentalize_pdb(pdb_lines):
@@ -161,7 +160,7 @@ def compartmentalize_pdb(pdb_lines):
                 except KeyError:
                     atomlines_blocked_by_chain[line[21]] = {int(line[22:26]): [line]}
                     sequence_by_chain[line[21]] = convert_res_type(line[17:20])
-                    xyz_by_chain[line[21]] = {int(line[22:26]): [float(line[30:38]),float(line[38:46]),float(line[46:54])]}
+                    xyz_by_chain[line[21]] = {int(line[22:26]): [[float(line[30:38]),float(line[38:46]),float(line[46:54])]]}
 
     print 'length of chains', len(atomlines_blocked_by_chain)
     for chain, seq in sequence_by_chain.iteritems():
@@ -170,7 +169,18 @@ def compartmentalize_pdb(pdb_lines):
     print atomlines_blocked_by_chain['A'][6]
     print xyz_by_chain['A'][6]
 
-    return atomlines_blocked_by_chain, sequence_by_chain, xyz_by_chain
+    return sequence_by_chain #atomlines_blocked_by_chain, sequence_by_chain, xyz_by_chain
+
+
+class SymmPose(Transform):
+    
+    def __init__(self, pdb):
+		super(SymmPose, self).__init__(pdb)
+
+        self.sequence_by_chain = compartmentalize_pdb(pdb)
+				
+	def cut_missing_res(self):
+		return
 
 sequence_alignment('ABCDEFGHHIJKLM','BCDHIJL')
 sequence_alignment('BCDHIJL','ABCDEFGHHIJKLM')
@@ -198,7 +208,10 @@ for model in pdb_by_model:
     all_symm_pdbs = apply_biomts(model, relevant_biomols)
     for symm_pdb in all_symm_pdbs:
         #I want to maximize the occupancy of the residues in this step
-        compartmentalize_pdb(symm_pdb)
+        atom_lines, sequence_by_chain, xyz_lines = compartmentalize_pdb(symm_pdb)
+        
+        #This is where we need to start making the most symmetric object
+
         #exit(0)
         with open('../blah_%i.pdb' % count, 'w') as myNewFH:
             myNewFH.writelines(symm_pdb)
