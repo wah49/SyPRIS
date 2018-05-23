@@ -907,6 +907,7 @@ class Transform(object):
                 self.chain_names = []
                 self.sub_symm_objs = {}
                 self.sub_symm_centers = {}
+                self.pose_to_original_resnum = {}
         
         #working on this
         '''else:
@@ -1227,6 +1228,52 @@ class Transform(object):
         
         return name
 
+    def convert_to_pose_num(self, update=True):
+        res_separated_blocks = block_pdb_by_res(self.pdb[:])
+        names = []
+        pdb_lines = []
+        for i_block, block in enumerate(res_separated_blocks):
+            for i_line, line in enumerate(block):
+                newline = ''.join([res_separated_blocks[i_block][i_line][:22], \
+                          ('{0:>4}').format( "%i" % (i_block + 1) ), \
+                          res_separated_blocks[i_block][i_line][26:]])
+                pdb_lines.append(newline)
+                names.append(str(i_block + 1) + '_' +\
+                             line[21].upper() + '_' +\
+                             line[17:20].strip().upper() + '_' +\
+                             line[11:17].strip().upper())
+                self.pose_to_original_resnum[i_block +1] = str(int(line[22:30]))
+        if update == True:
+            self.xyz_names = names[:]
+            self.pdb = pdb_lines[:]
+        else:
+            return pdb_lines[:]
+    
+
+    def convert_to_original_resnum(self, update=True):
+        if not self.pose_to_original_resnum:
+            print "convert_to_original_resnum Error: Transform object was never converted to pose_num\
+                   and does not have a pose to resnum dictionary. Keeping the current resnums."
+        res_separated_blocks = block_pdb_by_res(self.pdb[:])
+        names = []
+        pdb_lines = []
+        for i_block, block in enumerate(res_separated_blocks):
+            for i_line, line in enumerate(block):
+                newline = ''.join([res_separated_blocks[i_block][i_line][:22], \
+                          ('{0:>4}').format(self.pose_to_original_resnum[i_block + 1]), \
+                          res_separated_blocks[i_block][i_line][26:]])
+                pdb_lines.append(newline)
+                names.append(self.pose_to_original_resnum[i_block + 1]+ '_' +\
+                             line[21].upper() + '_' +\
+                             line[17:20].strip().upper() + '_' +\
+                             line[11:17].strip().upper())
+        if update == True:
+            self.xyz_names = names[:]
+            self.pdb = pdb_lines[:]
+        else:
+            return pdb_lines[:]
+
+
     #this can take list or string as arguement
     def get_xyz_by_chain(self, chain, update=False):
         if type(chain) == str:
@@ -1306,7 +1353,7 @@ class Transform(object):
         if type(res_num) == str:
             res_num = [res_num.upper()]
         elif type(res_num) == list:
-            res_num = [str(x).upper() for x in res_num]
+            res_num = [str(x) for x in res_num]
         coords_by_res_num = []
         names_by_res_num = []
         pdb_lines_by_res_num = []
@@ -1419,7 +1466,9 @@ class Transform(object):
     #Also, if a small region is symmetric, update the transform object to only contain
     #the atoms that are symmetric prior to calculating the matrix. You can then extract
     #the matrix from self.matrix_transform from the small component to a larger component
-    def calculate_symmetric_transform(self, main_chain_id=self.chain_names[0]):
+    def calculate_symmetric_transform(self, main_chain_id=''):
+        if not main_chain:
+            main_chain = self.chain_names[0]        
         xyz_total_by_chain = {}
         for index, name in enumerate(xyz_names_involved):
             chain = name.split('_')[1]

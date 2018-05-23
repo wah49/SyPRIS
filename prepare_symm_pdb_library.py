@@ -1,5 +1,7 @@
 import os, sys, requests, string
 
+from transform import *
+
 mer_type = { 1:'MONOMERIC', 2:'DIMERIC', 3:'TRIMERIC', 4:'TETRAMERIC', 5:'PENTAMERIC',\
              6:'HEXAMERIC', 7:'HEPTAMERIC', 8:'OCTAMERIC', 9:'NONAMERIC', 10:'DECAMERIC' }
 
@@ -77,7 +79,7 @@ def apply_biomts(pdb_lines, relevant_biomols):
             for block_number, biomt in biomt_blocks.iteritems():
                 for chain in chains:
                     for line in pdb_lines:
-                        if line[0:6] in ["ATOM  ", "HETATM"] and line[21] == chain and str(line[17:20]) != 'HOH':
+                        if line[0:6] == "ATOM  " and line[21] == chain and str(line[17:20]) != 'HOH':
                             try:
                                 new_pdb[chain_count].append(apply_biomt_transform(line, biomt))
                             except KeyError:
@@ -175,12 +177,38 @@ def compartmentalize_pdb(pdb_lines):
 class SymmPose(Transform):
     
     def __init__(self, pdb):
-		super(SymmPose, self).__init__(pdb)
-
+        super(SymmPose, self).__init__(pdb)
+        
         self.sequence_by_chain = compartmentalize_pdb(pdb)
-				
-	def cut_missing_res(self):
-		return
+    
+    def cut_missing_res(self):
+        chain_keys = self.sequence_by_chain.keys()
+        chain_keys.sort()
+        print chain_keys
+        residues_to_remove = set()
+        res_count = 0
+        for chain_index, chain_letter1 in enumerate(chain_keys):
+            for chain_index2, chain_letter2 in enumerate(chain_keys):
+                print 'chain_index', chain_index
+                print 'chain_letter1', chain_letter1
+                print 'chain_letter2', chain_letter2
+                main_chain_seq, sec_chain_seq = sequence_alignment(self.sequence_by_chain[chain_letter1], self.sequence_by_chain[chain_letter2])
+                #index starts from 0, pose number starts from 1
+                if chain_index2 == 0:
+                    res_count += len([x for x in main_chain_seq if x != '_'])
+                for l_index, letter in enumerate(sec_chain_seq):
+                    if letter == '_':
+                        residues_to_remove.add((chain_index)*len(main_chain_seq) + (l_index + 1))
+        print res_count
+        exit(0)
+        print residues_to_remove
+        exit(0)
+        residues_to_keep = residues_total - residues_to_remove
+        a= list(residues_to_keep)
+        a.sort()
+        print a
+        #return a
+        self.get_xyz_by_resnum(list(residues_to_keep), update=True)
 
 sequence_alignment('ABCDEFGHHIJKLM','BCDHIJL')
 sequence_alignment('BCDHIJL','ABCDEFGHHIJKLM')
@@ -208,15 +236,28 @@ for model in pdb_by_model:
     all_symm_pdbs = apply_biomts(model, relevant_biomols)
     for symm_pdb in all_symm_pdbs:
         #I want to maximize the occupancy of the residues in this step
-        atom_lines, sequence_by_chain, xyz_lines = compartmentalize_pdb(symm_pdb)
-        
+        sequence_by_chain = compartmentalize_pdb(symm_pdb)
         #This is where we need to start making the most symmetric object
+        #First we need to find the missing density -> cut the pdb down to just the BB
+        symm_pdb_obj = SymmPose(symm_pdb)
+        symm_pdb_obj.convert_to_pose_num()
+        symm_pdb_obj.get_xyz_by_atomtype(['N','CA','C','O'], update=True)
+        print '\n\n\n\n\n\n'
+        print symm_pdb_obj.xyz_names
+        print '\n\n\n\n\n\n'
+        symm_pdb_obj.cut_missing_res()
+        print '\n\n\n\n\n\n'
+        print symm_pdb_obj.xyz_names
+        print '\n\n\n\n\n\n'
+        print symm_pdb_obj.pose_to_original_resnum
+        print '\n\n\n\n\n\n'
+        #exit(0)
+        symm_pdb_obj.write_to_file('../yay.pb')
+        symm_pdb_obj.convert_to_original_resnum()
+        output_pdb = symm_pdb_obj.return_to_pdb()
 
         #exit(0)
-        with open('../blah_%i.pdb' % count, 'w') as myNewFH:
-            myNewFH.writelines(symm_pdb)
+        with open('../blah_min_%i.pdb' % count, 'w') as myNewFH:
+            myNewFH.writelines(output_pdb)
         count += 1
         
-
-
-                
