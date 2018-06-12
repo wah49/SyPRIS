@@ -144,6 +144,22 @@ def sequence_alignment(seq1, seq2, match=-1, missmatch=20, gap=1):
     print aligned_seq2[::-1]
     return aligned_seq1[::-1], aligned_seq2[::-1]
 
+def merge_matched_sequences(chain_sequences):
+	'''Function used to create a master sequence with all missing density filled in. Input
+	required is a list of all the sequences for each chain. Outputs merged master sequence'''
+    #Start with first and then compare each seq and merge until one final sequence exists
+	seq1 = chain_sequences[0]
+	for seq2 in chain_sequences[1:]:
+		aligned_seq1, aligned_seq2 = sequence_alignment(seq1, seq2)
+		merged_sequence = ''
+		for index, letter1 in enumerate(aligned_seq1):
+			if letter1 != '_':
+				merged_sequence += letter1
+			else: 
+				merged_sequence += aligned_seq2[index]
+		seq1 = merged_sequence
+	return merged_sequence
+
 def compartmentalize_pdb(pdb_lines):
     #{chain_key: {resi: list_of_atom_lines}}
     atomlines_blocked_by_chain = {}
@@ -180,6 +196,29 @@ class SymmPose(Transform):
         super(SymmPose, self).__init__(pdb)
         
         self.sequence_by_chain = compartmentalize_pdb(pdb)
+        self.master_sequence = merge_matched_sequences(self.sequence_by_chain.values())
+
+    def renumber_pdb_for_missing_density(self):
+        res_separated_blocks = block_pdb_by_res(self.pdb[:])
+        names = []
+        pdb_lines = []
+
+        for i_block, block in enumerate(res_separated_blocks):
+            for i_line, line in enumerate(block):
+                newline = ''.join([res_separated_blocks[i_block][i_line][:22], \
+                          ('{0:>4}').format( "%i" % (i_block + 1) ), \
+                          res_separated_blocks[i_block][i_line][26:]])
+                pdb_lines.append(newline)
+                names.append(str(i_block + 1) + '_' +\
+                             line[21].upper() + '_' +\
+                             line[17:20].strip().upper() + '_' +\
+                             line[11:17].strip().upper())
+                self.pose_to_original_resnum[i_block +1] = str(int(line[22:30]))
+        if update == True:
+            self.xyz_names = names[:]
+            self.pdb = pdb_lines[:]
+        else:
+            return pdb_lines[:]        
     
     def cut_missing_res(self):
         chain_keys = self.sequence_by_chain.keys()
