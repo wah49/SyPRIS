@@ -140,25 +140,51 @@ def sequence_alignment(seq1, seq2, match=-1, missmatch=20, gap=1):
             aligned_seq2 += '_'
 
         current_pos = next_pos
-    print aligned_seq1[::-1]
-    print aligned_seq2[::-1]
+    #print aligned_seq1[::-1]
+    #print aligned_seq2[::-1]
     return aligned_seq1[::-1], aligned_seq2[::-1]
 
+def find_missing_density_in_seq(master, chain_sequences):
+    chain_letters = chain_sequences.keys()
+    chain_letters.sort()
+    chain_sequences_filled = {}
+    complete_sequence = ''
+
+    missing_res = set()
+    print '\n', chain_sequences
+    for chain, sequence in chain_sequences.iteritems():
+        aligned_master, aligned_chain = sequence_alignment(master, sequence)
+        complete_sequence += aligned_chain
+        chain_sequences_filled[chain] = aligned_chain
+        
+        print chain
+        print aligned_chain
+        for index, letter in enumerate(aligned_chain, start=1):
+            if letter == '_':
+                for chain_ind in xrange(len(chain_letters)):
+                    missing_res.add(index + (chain_ind * len(master)))
+
+    print missing_res
+    sys.exit()
+
+    return chain_sequences_filled, complete_sequence, missing_res
+
+
 def merge_matched_sequences(chain_sequences):
-	'''Function used to create a master sequence with all missing density filled in. Input
-	required is a list of all the sequences for each chain. Outputs merged master sequence'''
+    '''Function used to create a master sequence with all missing density filled in. Input
+    required is a list of all the sequences for each chain. Outputs merged master sequence'''
     #Start with first and then compare each seq and merge until one final sequence exists
-	seq1 = chain_sequences[0]
-	for seq2 in chain_sequences[1:]:
-		aligned_seq1, aligned_seq2 = sequence_alignment(seq1, seq2)
-		merged_sequence = ''
-		for index, letter1 in enumerate(aligned_seq1):
-			if letter1 != '_':
-				merged_sequence += letter1
-			else: 
-				merged_sequence += aligned_seq2[index]
-		seq1 = merged_sequence
-	return merged_sequence
+    seq1 = chain_sequences[0]
+    for seq2 in chain_sequences[1:]:
+        aligned_seq1, aligned_seq2 = sequence_alignment(seq1, seq2)
+        merged_sequence = ''
+        for index, letter1 in enumerate(aligned_seq1):
+            if letter1 != '_':
+                merged_sequence += letter1
+            else: 
+                merged_sequence += aligned_seq2[index]
+        seq1 = merged_sequence
+    return merged_sequence
 
 def compartmentalize_pdb(pdb_lines):
     #{chain_key: {resi: list_of_atom_lines}}
@@ -194,15 +220,15 @@ class SymmPose(Transform):
     
     def __init__(self, pdb):
         super(SymmPose, self).__init__(pdb)
-        
-        self.sequence_by_chain = compartmentalize_pdb(pdb)
-        self.master_sequence = merge_matched_sequences(self.sequence_by_chain.values())
 
+        self.orig_sequence_by_chain = compartmentalize_pdb(pdb)
+        self.master_sequence = merge_matched_sequences(self.orig_sequence_by_chain.values())
+        self.filled_seq_by_chain, self.complete_sequence, self.missing_res_set = find_missing_density_in_seq(self.master_sequence, self.orig_sequence_by_chain)
+    
     def renumber_pdb_for_missing_density(self):
         res_separated_blocks = block_pdb_by_res(self.pdb[:])
         names = []
         pdb_lines = []
-
         for i_block, block in enumerate(res_separated_blocks):
             for i_line, line in enumerate(block):
                 newline = ''.join([res_separated_blocks[i_block][i_line][:22], \
@@ -218,8 +244,8 @@ class SymmPose(Transform):
             self.xyz_names = names[:]
             self.pdb = pdb_lines[:]
         else:
-            return pdb_lines[:]        
-    
+            return pdb_lines[:]
+            
     def cut_missing_res(self):
         chain_keys = self.sequence_by_chain.keys()
         chain_keys.sort()
